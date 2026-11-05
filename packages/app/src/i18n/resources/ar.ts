@@ -1182,6 +1182,7 @@ export const ar: TranslationResources = {
         project: "المشروع",
         status: "الحالة",
         labels: "التسميات",
+        host: "المضيف",
       },
       titleSource: {
         label: "العنوان",

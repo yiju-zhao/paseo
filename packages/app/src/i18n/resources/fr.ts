@@ -1211,6 +1211,7 @@ export const fr: TranslationResources = {
         project: "Projet",
         status: "Statut",
         labels: "Libellés",
+        host: "Hôte",
       },
       titleSource: {
         label: "Titre",

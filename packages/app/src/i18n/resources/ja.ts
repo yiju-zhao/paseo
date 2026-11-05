@@ -1195,6 +1195,7 @@ export const ja: TranslationResources = {
         project: "プロジェクト",
         status: "ステータス",
         labels: "ラベル",
+        host: "ホスト",
       },
       titleSource: {
         label: "タイトル",

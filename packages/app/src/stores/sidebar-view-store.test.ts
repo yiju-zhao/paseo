@@ -127,6 +127,42 @@ describe("sidebar view store", () => {
     });
   });
 
+  it("restores host grouping without resetting sorting or filters", () => {
+    expect(
+      migrateSidebarViewState({
+        groupMode: "host",
+        workspaceSort: "manual",
+        showBackground: true,
+        hostFilters: ["host-a"],
+        projectFilters: ["git:shared"],
+        labelFilter: { labels: ["urgent"] },
+      }),
+    ).toEqual({
+      groupMode: "host",
+      workspaceSort: "manual",
+      showBackground: true,
+      hostFilters: ["host-a"],
+      projectFilters: ["git:shared"],
+      labelFilter: { labels: ["urgent"] },
+    });
+  });
+
+  it("switches between host and project grouping while retaining the other preferences", () => {
+    useSidebarViewStore.setState({ workspaceSort: "manual", hostFilters: ["host-a"] });
+    useSidebarViewStore.getState().setGroupMode("host");
+    expect(useSidebarViewStore.getState()).toMatchObject({
+      groupMode: "host",
+      workspaceSort: "manual",
+      hostFilters: ["host-a"],
+    });
+    useSidebarViewStore.getState().setGroupMode("project");
+    expect(useSidebarViewStore.getState()).toMatchObject({
+      groupMode: "project",
+      workspaceSort: "manual",
+      hostFilters: ["host-a"],
+    });
+  });
+
   it("clears only the label facet", () => {
     useSidebarViewStore.setState({
       groupMode: "status",

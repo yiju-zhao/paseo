@@ -1189,6 +1189,7 @@ export const ko: TranslationResources = {
         project: "프로젝트",
         status: "상태",
         labels: "레이블",
+        host: "호스트",
       },
       titleSource: {
         label: "제목",

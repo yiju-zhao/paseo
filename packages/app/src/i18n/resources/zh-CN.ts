@@ -1174,6 +1174,7 @@ export const zhCN: TranslationResources = {
         project: "项目",
         status: "状态",
         labels: "标签",
+        host: "主机",
       },
       titleSource: {
         label: "标题",

@@ -1199,6 +1199,7 @@ export const ru: TranslationResources = {
         project: "Проект",
         status: "Статус",
         labels: "Метки",
+        host: "Хост",
       },
       titleSource: {
         label: "Заголовок",

@@ -20,6 +20,11 @@ import {
   type SidebarShortcutSection,
 } from "@/utils/sidebar-shortcuts";
 import { statusWorkspaceGroups, type SidebarWorkspaceGroup } from "./sidebar-labels";
+import {
+  buildSidebarHostGroups,
+  sidebarHostProjectSectionKey,
+  sidebarHostSectionKey,
+} from "./host-groups";
 
 export interface SidebarProjection {
   pinnedGroups: PinnedSidebarGroups;
@@ -43,6 +48,7 @@ export interface SidebarProjectionInput {
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
+  hostOrder: readonly string[];
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -75,6 +81,17 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
         collapsed: input.collapsedProjectKeys.has(project.viewKey),
       })),
     );
+  } else if (input.groupMode === "host") {
+    for (const host of buildSidebarHostGroups(pinnedGroups.unpinnedProjects, input.hostOrder)) {
+      const hostCollapsed = input.collapsedProjectKeys.has(sidebarHostSectionKey(host.serverId));
+      for (const project of host.projects) {
+        const projectKey = sidebarHostProjectSectionKey(host.serverId, project.viewKey);
+        sections.push({
+          workspaces: project.workspaces,
+          collapsed: hostCollapsed || input.collapsedProjectKeys.has(projectKey),
+        });
+      }
+    }
   } else {
     sections.push(
       ...workspaceGroups.map((group) => ({
@@ -92,13 +109,14 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
   };
 }
 
-/** Project mode keeps its project headers and groups nothing; status mode groups the rows. */
+/** Project and host modes keep project headers; status mode groups the workspace rows. */
 function buildWorkspaceGroups(
   input: SidebarProjectionInput,
   unpinnedWorkspaces: SidebarWorkspaceEntry[],
 ): SidebarWorkspaceGroup[] {
   switch (input.groupMode) {
     case "project":
+    case "host":
       return [];
     case "status":
       return statusWorkspaceGroups(

@@ -98,6 +98,13 @@ import {
 } from "@/components/sidebar/sidebar-workspace-menu";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { SidebarSectionHeader } from "@/components/sidebar/sidebar-section-header";
+import { HostStatusDot } from "@/components/host-status-dot";
+import {
+  buildSidebarHostGroups,
+  sidebarHostSectionKey,
+  sidebarHostProjectSectionKey,
+  type SidebarHostGroup,
+} from "@/components/sidebar/host-groups";
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { createWorkspaceVisibilityPolicy } from "@/components/sidebar/sidebar-group-visibility";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
@@ -243,6 +250,7 @@ interface SidebarWorkspaceListProps {
 
 interface ProjectHeaderRowProps {
   project: SidebarProjectEntry;
+  sectionKey: string;
   displayName: string;
   iconDataUri: string | null;
   statusBucket: SidebarStateBucket | null;
@@ -851,6 +859,7 @@ function NewWorkspaceGhostRow({
 
 function ProjectHeaderRow({
   project,
+  sectionKey,
   displayName,
   iconDataUri,
   statusBucket,
@@ -963,7 +972,7 @@ function ProjectHeaderRow({
         </View>
       </View>
       <ProjectRowTrailingActions
-        projectViewKey={project.viewKey}
+        projectViewKey={sectionKey}
         displayName={displayName}
         worktreeTarget={worktreeTarget}
         settingsTarget={settingsTarget}
@@ -1000,7 +1009,7 @@ function ProjectHeaderRow({
           onTouchMove={interaction.handleTouchMove}
           onPressOut={handleProjectPressOut}
           onPress={handlePress}
-          testID={`sidebar-project-row-${project.viewKey}`}
+          testID={`sidebar-project-row-${sectionKey}`}
         >
           {rowChildren}
         </PressHighlight>
@@ -1026,7 +1035,7 @@ function ProjectHeaderRow({
           onTouchMove={interaction.handleTouchMove}
           onPressOut={handleProjectPressOut}
           onPress={handlePress}
-          testID={`sidebar-project-row-${project.viewKey}`}
+          testID={`sidebar-project-row-${sectionKey}`}
         >
           {rowChildren}
         </ContextMenuTrigger>
@@ -1034,11 +1043,11 @@ function ProjectHeaderRow({
       <ContextMenuContent
         align="start"
         width={220}
-        testID={`sidebar-project-context-menu-${project.viewKey}`}
+        testID={`sidebar-project-context-menu-${sectionKey}`}
       >
         <ProjectMenuItems
           surface="context"
-          projectViewKey={project.viewKey}
+          projectViewKey={sectionKey}
           settingsTarget={settingsTarget}
           projectPath={projectPath}
           onRemoveProject={onRemoveProject}
@@ -1542,6 +1551,7 @@ function WorkspaceRow({
 
 function ProjectBlock({
   project,
+  collapseKey,
   workspaceEntriesByKey,
   collapsed,
   displayName,
@@ -1568,6 +1578,7 @@ function ProjectBlock({
   onToggleWorkspacePin,
 }: {
   project: SidebarProjectEntry;
+  collapseKey: string;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   collapsed: boolean;
   displayName: string;
@@ -1760,8 +1771,8 @@ function ProjectBlock({
   }, [isRemovingProject, displayName, t, toast, project.hosts]);
 
   const handleToggleCollapsed = useCallback(() => {
-    onToggleCollapsed(project.viewKey);
-  }, [onToggleCollapsed, project.viewKey]);
+    onToggleCollapsed(collapseKey);
+  }, [collapseKey, onToggleCollapsed]);
 
   let projectChildren = null;
   if (!collapsed) {
@@ -1773,7 +1784,7 @@ function ProjectBlock({
             <>
               {leadingWorkspaceRow}
               <DraggableList
-                testID={`sidebar-workspace-list-${project.viewKey}`}
+                testID={`sidebar-workspace-list-${collapseKey}`}
                 data={visibleWorkspaces}
                 keyExtractor={workspaceKeyExtractor}
                 renderItem={renderWorkspace}
@@ -1789,7 +1800,7 @@ function ProjectBlock({
             </>
           ) : (
             <View
-              testID={`sidebar-workspace-list-${project.viewKey}`}
+              testID={`sidebar-workspace-list-${collapseKey}`}
               style={styles.workspaceListContainer}
             >
               {leadingWorkspaceRow}
@@ -1800,7 +1811,7 @@ function ProjectBlock({
             <SidebarGroupToggleRow
               expanded={workspacesExpanded}
               onPress={toggleWorkspacesExpanded}
-              testID={`sidebar-project-show-more-${project.viewKey}`}
+              testID={`sidebar-project-show-more-${collapseKey}`}
             />
           ) : null}
         </>
@@ -1825,6 +1836,7 @@ function ProjectBlock({
     >
       <ProjectHeaderRow
         project={project}
+        sectionKey={collapseKey}
         displayName={displayName}
         iconDataUri={iconDataUri}
         statusBucket={aggregateStatusBucket}
@@ -1857,6 +1869,7 @@ type ProjectBlockProps = Parameters<typeof ProjectBlock>[0];
 function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlockProps): boolean {
   return (
     previous.project === next.project &&
+    previous.collapseKey === next.collapseKey &&
     projectWorkspaceEntriesEqual(previous, next) &&
     previous.collapsed === next.collapsed &&
     previous.displayName === next.displayName &&
@@ -2012,11 +2025,8 @@ export function SidebarWorkspaceList({
   // reach the display menu to reveal their work again.
   const sidebarFilterEmpty = hasProjectsBeforeFilter && projects.length === 0;
 
-  // Project mode is the one that keeps its project headers; every other grouping mode is a flat
-  // list of grouped rows, so a new mode lands in the grouped branch rather than silently in this
-  // one's `else`.
   const content =
-    groupMode !== "project" ? (
+    groupMode === "status" ? (
       <SidebarGroupedModeList
         workspaceGroups={workspaceGroups}
         pinnedGroups={pinnedGroups}
@@ -2035,6 +2045,7 @@ export function SidebarWorkspaceList({
       />
     ) : (
       <ProjectModeList
+        groupByHost={groupMode === "host"}
         projects={projects}
         pinnedGroups={pinnedGroups}
         workspaceEntriesByKey={workspaceEntriesByKey}
@@ -2064,10 +2075,7 @@ export function SidebarWorkspaceList({
 }
 
 /**
- * Every grouping mode except project: the rows are grouped by something that is not a project, so
- * each row carries its own project icon. Named for what it does rather than for the first mode
- * that needed it — `SidebarStatusModeWrapper` is what made a label-mode reader believe the data
- * above it was status-only.
+ * Flat workspace groups carry a project icon on each row instead of separate project headers.
  */
 function SidebarGroupedModeList({
   workspaceGroups,
@@ -2131,6 +2139,7 @@ function SidebarGroupedModeList({
 }
 
 function ProjectModeList({
+  groupByHost,
   projects,
   pinnedGroups,
   workspaceEntriesByKey,
@@ -2162,6 +2171,7 @@ function ProjectModeList({
   | "isRefreshing"
   | "onRefresh"
 > & {
+  groupByHost: boolean;
   /** Swaps the list body for the label filter's empty state. Never the header above it. */
   sidebarFilterEmpty: boolean;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
@@ -2197,6 +2207,15 @@ function ProjectModeList({
   const selectionEnabled = isWorkspaceRoute;
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const { pinnedChats, unpinnedProjects } = pinnedGroups;
+  const hosts = useHosts();
+  const hostLabelsByServerId = useMemo(
+    () => new Map(hosts.map((host) => [host.serverId, host.label])),
+    [hosts],
+  );
+  const hostGroups = useMemo(() => {
+    const serverIds = hosts.map((host) => host.serverId);
+    return groupByHost ? buildSidebarHostGroups(unpinnedProjects, serverIds) : [];
+  }, [groupByHost, hosts, unpinnedProjects]);
   const {
     leadingItem: leadingPinnedChat,
     visibleItems: visiblePinnedChats,
@@ -2348,13 +2367,15 @@ function ProjectModeList({
         isDragging: boolean;
         dragHandleProps?: DraggableRenderItemInfo<SidebarProjectEntry>["dragHandleProps"];
       },
+      collapseKey: string,
     ) => {
       return (
         <MemoProjectBlock
           key={item.viewKey}
           project={item}
+          collapseKey={collapseKey}
           workspaceEntriesByKey={workspaceEntriesByKey}
-          collapsed={collapsedProjectKeys.has(item.viewKey)}
+          collapsed={collapsedProjectKeys.has(collapseKey)}
           displayName={item.projectName}
           iconDataUri={projectIconByProjectViewKey.get(item.viewKey) ?? null}
           selectionEnabled={selectionEnabled}
@@ -2405,7 +2426,20 @@ function ProjectModeList({
 
   const renderProject = useCallback(
     ({ item, drag, isActive, dragHandleProps }: DraggableRenderItemInfo<SidebarProjectEntry>) =>
-      renderProjectBlock(item, { drag, isDragging: isActive, dragHandleProps }),
+      renderProjectBlock(item, { drag, isDragging: isActive, dragHandleProps }, item.viewKey),
+    [renderProjectBlock],
+  );
+
+  const renderHostProject = useCallback(
+    (
+      { item, drag, isActive, dragHandleProps }: DraggableRenderItemInfo<SidebarProjectEntry>,
+      serverId: string,
+    ) =>
+      renderProjectBlock(
+        item,
+        { drag, isDragging: isActive, dragHandleProps },
+        sidebarHostProjectSectionKey(serverId, item.viewKey),
+      ),
     [renderProjectBlock],
   );
 
@@ -2472,10 +2506,32 @@ function ProjectModeList({
     [renderPinnedChatRow],
   );
 
-  const projectBody =
-    projects.length === 0 ? (
+  let projectBody: ReactElement;
+  if (projects.length === 0) {
+    projectBody = (
       <SidebarProjectEmptyState onAddProject={onAddProject} onImportSession={onImportSession} />
-    ) : (
+    );
+  } else if (groupByHost) {
+    projectBody = (
+      <View testID="sidebar-host-list">
+        {hostGroups.map((group) => (
+          <SidebarHostProjectSection
+            key={group.serverId}
+            group={group}
+            title={hostLabelsByServerId.get(group.serverId) ?? group.serverId}
+            collapsed={collapsedProjectKeys.has(sidebarHostSectionKey(group.serverId))}
+            onToggleCollapsed={onToggleProjectCollapsed}
+            renderProject={renderHostProject}
+            onProjectReorder={handleProjectDragEnd}
+            selectionKey={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
+            parentGestureRef={parentGestureRef}
+            dragGestureHostActive={dragGestureHostActive}
+          />
+        ))}
+      </View>
+    );
+  } else {
+    projectBody = (
       <DraggableList
         testID="sidebar-project-list"
         data={unpinnedProjects}
@@ -2491,6 +2547,7 @@ function ProjectModeList({
         containerStyle={styles.projectListContainer}
       />
     );
+  }
 
   const content = (
     <>
@@ -2573,6 +2630,71 @@ function ProjectModeList({
   );
 }
 
+function SidebarHostProjectSection({
+  group,
+  title,
+  collapsed,
+  onToggleCollapsed,
+  renderProject,
+  onProjectReorder,
+  selectionKey,
+  parentGestureRef,
+  dragGestureHostActive,
+}: {
+  group: SidebarHostGroup;
+  title: string;
+  collapsed: boolean;
+  onToggleCollapsed: (sectionKey: string) => void;
+  renderProject: (
+    info: DraggableRenderItemInfo<SidebarProjectEntry>,
+    serverId: string,
+  ) => ReactElement;
+  onProjectReorder: (projects: SidebarProjectEntry[]) => void;
+  selectionKey: string;
+  parentGestureRef?: MutableRefObject<GestureType | undefined>;
+  dragGestureHostActive?: boolean;
+}) {
+  const handleToggle = useCallback(
+    () => onToggleCollapsed(sidebarHostSectionKey(group.serverId)),
+    [group.serverId, onToggleCollapsed],
+  );
+  const renderHostProject = useCallback(
+    (info: DraggableRenderItemInfo<SidebarProjectEntry>) => renderProject(info, group.serverId),
+    [group.serverId, renderProject],
+  );
+
+  return (
+    <View role="group" accessibilityLabel={title} testID={`sidebar-host-section-${group.serverId}`}>
+      <SidebarSectionHeader
+        title={title}
+        collapsed={collapsed}
+        onToggle={handleToggle}
+        testID={`sidebar-host-header-${group.serverId}`}
+      >
+        <HostStatusDot serverId={group.serverId} />
+      </SidebarSectionHeader>
+      {collapsed ? null : (
+        <View style={styles.hostProjects}>
+          <DraggableList
+            testID={`sidebar-host-project-list-${group.serverId}`}
+            data={group.projects}
+            keyExtractor={projectViewKeyExtractor}
+            renderItem={renderHostProject}
+            onDragEnd={onProjectReorder}
+            extraData={selectionKey}
+            scrollEnabled={false}
+            useDragHandle
+            nestable={platformIsNative}
+            simultaneousGestureRef={parentGestureRef}
+            gestureHostPresented={dragGestureHostActive}
+            containerStyle={styles.projectListContainer}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
@@ -2589,6 +2711,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   projectListContainer: {
     width: "100%",
+  },
+  hostProjects: {
+    paddingLeft: theme.spacing[2],
   },
   pinnedSection: {
     marginBottom: theme.spacing[1],

@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { test as base } from "../support/fixtures";
+import { expect, test as base } from "../support/fixtures";
+import { openSidebarDisplayPage } from "../support/helpers/sidebar";
 import {
   beginWorkspaceFromProject,
   createWorkspaceWithoutAgent,
@@ -333,6 +334,58 @@ async function openScenario(
 
 test.describe("Sidebar project grouping", () => {
   test.describe.configure({ timeout: 120_000 });
+
+  test("host grouping splits shared projects and remembers independent collapsed hosts", async ({
+    page,
+    crossHostProject,
+  }) => {
+    await openScenario(page, crossHostProject);
+    await openSidebarDisplayPage(page, "sidebar-display-grouping");
+    await page.getByTestId("sidebar-grouping-host").click();
+
+    const primaryServerId = getServerId();
+    const secondaryServerId = crossHostProject.hosts[0].serverId;
+    const primary = page.getByTestId(`sidebar-host-section-${primaryServerId}`);
+    const secondary = page.getByTestId(`sidebar-host-section-${secondaryServerId}`);
+    const primaryWorkspace = primary.getByRole("button").filter({ hasText: "Primary workspace" });
+    const secondaryWorkspace = secondary
+      .getByRole("button")
+      .filter({ hasText: "Secondary workspace" });
+
+    await expect(
+      primary.getByRole("group", { name: GROUPED_PROJECT_NAME, exact: true }),
+    ).toBeVisible();
+    await expect(
+      secondary.getByRole("group", { name: GROUPED_PROJECT_NAME, exact: true }),
+    ).toBeVisible();
+    await expect(primaryWorkspace).toBeVisible();
+    await expect(secondaryWorkspace).toBeVisible();
+    await expect(primary.getByText("Secondary workspace", { exact: true })).toHaveCount(0);
+    await expect(secondary.getByText("Primary workspace", { exact: true })).toHaveCount(0);
+
+    const primaryProject = primary.locator('[data-testid^="sidebar-project-row-"]');
+    await primaryProject.click();
+    await expect(primaryWorkspace).toHaveCount(0);
+    await expect(secondaryWorkspace).toBeVisible();
+    await primaryProject.click();
+    await expect(primaryWorkspace).toBeVisible();
+
+    const primaryHeader = page.getByTestId(`sidebar-host-header-${primaryServerId}`);
+    await primaryHeader.click();
+    await expect(primaryHeader).toHaveAttribute("aria-expanded", "false");
+    await expect(primaryWorkspace).toHaveCount(0);
+    await expect(secondaryWorkspace).toBeVisible();
+
+    await page.reload();
+    await expect(primaryHeader).toHaveAttribute("aria-expanded", "false");
+    await expect(primaryWorkspace).toHaveCount(0);
+    await expect(secondaryWorkspace).toBeVisible();
+
+    await primaryHeader.click();
+    await expect(primaryWorkspace).toBeVisible();
+    await secondaryWorkspace.click();
+    await expect(page).toHaveURL(new RegExp(`/h/${secondaryServerId}/workspace/`));
+  });
 
   test("groups projects with the same Git remote across hosts", async ({
     page,

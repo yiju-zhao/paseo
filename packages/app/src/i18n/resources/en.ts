@@ -1190,6 +1190,7 @@ export const en = {
         project: "Project",
         status: "Status",
         labels: "Labels",
+        host: "Host",
       },
       titleSource: {
         label: "Title",

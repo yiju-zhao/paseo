@@ -15,6 +15,9 @@ import {
   type SidebarGroupMode,
 } from "@/stores/sidebar-view-store";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
+import { applyStoredOrdering } from "@/hooks/sidebar-workspaces-view-model";
+import { useHosts } from "@/runtime/host-runtime";
+import { visibleSidebarProjectHosts } from "./host-groups";
 import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
 import { buildSidebarProjection } from "./sidebar-projection";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
@@ -57,6 +60,8 @@ export function SidebarModelProvider({
 }) {
   const { t } = useTranslation();
   const list = useSidebarWorkspacesList({ enabled: active });
+  const hosts = useHosts();
+  const hostOrder = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const showBackground = useSidebarViewStore((state) => state.showBackground);
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const labelFilter = useSidebarViewStore((state) => state.labelFilter);
@@ -71,6 +76,9 @@ export function SidebarModelProvider({
   );
   const pinnedCollapsed = useSidebarCollapsedSectionsStore((state) => state.collapsedPinned);
   const pinnedWorkspaceOrder = useSidebarOrderStore((state) => state.pinnedWorkspaceOrder);
+  const projectOrder = useSidebarOrderStore((state) => state.projectOrder);
+  const workspaceOrderByProject = useSidebarOrderStore((state) => state.workspaceOrderByProject);
+  const workspaceSort = useSidebarViewStore((state) => state.workspaceSort);
   const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.toggleProjectCollapsed,
   );
@@ -98,7 +106,7 @@ export function SidebarModelProvider({
   // anything; the label filter reads `labels`, which only exists on an entry. Hydration opens a
   // live session-store subscription over every workspace on every visible host, so widening this
   // for a filter that does not need it costs a retained-but-inactive sidebar real work.
-  const needsWorkspaceEntries = groupMode !== "project" || hasActiveLabelFilter;
+  const needsWorkspaceEntries = groupMode === "status" || hasActiveLabelFilter;
   const workspaceEntriesByKey = useSidebarWorkspaceEntries(
     list.workspacePlacements,
     active !== false || needsWorkspaceEntries,
@@ -133,6 +141,14 @@ export function SidebarModelProvider({
         const workspaces = project.workspaces.filter((workspace) =>
           visibleWorkspaceKeys.has(workspace.workspaceKey),
         );
+        if (groupMode === "host") {
+          const projectHosts = visibleSidebarProjectHosts({
+            project,
+            workspaces,
+            keepEmptyHosts: !hasActiveLabelFilter,
+          });
+          return projectHosts.length > 0 ? [{ ...project, hosts: projectHosts, workspaces }] : [];
+        }
         return workspaces.length > 0 || (!hasActiveLabelFilter && project.workspaces.length === 0)
           ? [workspaces.length === project.workspaces.length ? project : { ...project, workspaces }]
           : [];
@@ -141,6 +157,7 @@ export function SidebarModelProvider({
     return projects;
   }, [
     showBackground,
+    groupMode,
     hasActiveLabelFilter,
     hasActiveProjectFilter,
     resolvedProjectFilters,
@@ -148,14 +165,33 @@ export function SidebarModelProvider({
     visibleWorkspaceKeys,
   ]);
   const pinnedKeys = usePinnedSidebarKeys(filteredProjects);
+  const projectionProjects = useMemo(() => {
+    if (groupMode !== "host") return filteredProjects;
+    const orderedProjects = applyStoredOrdering({
+      items: filteredProjects,
+      storedOrder: projectOrder,
+      getKey: (project) => project.viewKey,
+    });
+    if (workspaceSort !== "manual") return orderedProjects;
+    return orderedProjects.map((project) =>
+      Object.assign({}, project, {
+        workspaces: applyStoredOrdering({
+          items: project.workspaces,
+          storedOrder: workspaceOrderByProject[project.viewKey] ?? [],
+          getKey: (workspace) => workspace.workspaceKey,
+        }),
+      }),
+    );
+  }, [filteredProjects, groupMode, projectOrder, workspaceOrderByProject, workspaceSort]);
   const projectionInput = useMemo(
     () => ({
-      projects: filteredProjects,
+      projects: projectionProjects,
       pinnedKeys,
       pinnedWorkspaceOrder,
       workspaceEntriesByKey: filteredWorkspaceEntriesByKey,
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
+      hostOrder,
       pinnedCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
@@ -165,8 +201,9 @@ export function SidebarModelProvider({
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       groupMode,
+      hostOrder,
       list.projectNamesByViewKey,
-      filteredProjects,
+      projectionProjects,
       pinnedCollapsed,
       pinnedKeys,
       pinnedWorkspaceOrder,
