@@ -1,4 +1,6 @@
-import { test } from "../support/fixtures";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+import { expect, test } from "../support/fixtures";
 import {
   expectContentColumnWidth,
   expectCustomContentWidthSetting,
@@ -11,6 +13,65 @@ import { openFileExplorer, openFileFromExplorer } from "../support/helpers/file-
 import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 const ULTRAWIDE_VIEWPORT = { width: 2560, height: 1080 };
+
+test("Markdown file prose reflows to the chosen width while explicit breaks and code stay intact", async ({
+  page,
+  withWorkspace,
+}, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("@paseo:app-settings", JSON.stringify({ contentMaxWidth: 1600 }));
+  });
+  const workspace = await withWorkspace({ prefix: "markdown-prose-width-" });
+  await writeFile(
+    path.join(workspace.repoPath, "report.md"),
+    [
+      "---",
+      "title: Company report",
+      "source: https://example.com/reports/annual-report.pdf",
+      "---",
+      "",
+      "# Company report",
+      "",
+      "公司的业务通过直营门店与线上渠道运营，",
+      "这段正文在源文件里手动分行，",
+      "预览时应该按阅读区域的宽度连续排版。",
+      "",
+      "Explicit first line  ",
+      "Explicit second line\\",
+      "Explicit third line",
+      "",
+      "```yaml",
+      "revenue: 100",
+      "margin: 20%",
+      "```",
+      "",
+    ].join("\n"),
+  );
+  await page.setViewportSize(ULTRAWIDE_VIEWPORT);
+  await workspace.navigateTo();
+  await openFileExplorer(page);
+  await openFileFromExplorer(page, "report.md");
+
+  const preview = page.getByTestId("markdown-preview-frame");
+  await expectContentColumnWidth(preview, { min: 1200, max: 1600 });
+  const prose = preview.locator("p").filter({ hasText: "公司的业务" });
+  await expect(prose).toBeVisible();
+  await expect(prose.locator("br")).toHaveCount(0);
+  await expect(
+    preview.locator("p").filter({ hasText: "Explicit first line" }).locator("br"),
+  ).toHaveCount(2);
+  await expect(preview.locator('[data-paseo-markdown-tag="code"]')).toHaveText(
+    "revenue: 100\nmargin: 20%",
+    { useInnerText: false },
+  );
+  await page.screenshot({ path: testInfo.outputPath("markdown-wide-prose.png") });
+
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(prose.locator("br")).toHaveCount(0);
+  await expect
+    .poll(() => preview.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
+});
 
 test("widens chat and Markdown files to the chosen content width and resets to the default", async ({
   page,

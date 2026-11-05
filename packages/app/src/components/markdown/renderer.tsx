@@ -22,6 +22,7 @@ import { MermaidFence, MermaidStreamingContext, splitMermaidFences } from "./fen
 
 const ThemedMarkdown = withUnistyles(EnrichedMarkdownText);
 const MD4C_FLAGS = { latexMath: false, hardSoftBreaks: true, admonitions: true };
+const WRAPPING_MD4C_FLAGS = { ...MD4C_FLAGS, hardSoftBreaks: false };
 
 // Reading the breakpoint here makes Unistyles restyle the text when the layout crosses it.
 const markdownStyle =
@@ -48,6 +49,8 @@ export interface MarkdownRendererProps extends MarkdownImageContext {
   muted?: boolean;
   selectable?: boolean;
   streaming?: boolean;
+  /** Chat preserves source newlines; document previews let paragraphs reflow. */
+  preserveLineBreaks?: boolean;
   onLinkPress?: (url: string) => unknown;
   agentCommands?: boolean;
 }
@@ -82,6 +85,7 @@ const MarkdownPart = memo(function MarkdownPart({
   muted = false,
   selectable = true,
   streaming = false,
+  preserveLineBreaks = true,
   onLinkPress,
   agentCommands: _agentCommands,
   commandHints = null,
@@ -137,7 +141,7 @@ const MarkdownPart = memo(function MarkdownPart({
               uniProps={pickMarkdownStyle(compact, muted)}
               flavor="github"
               selectable={selectable}
-              md4cFlags={MD4C_FLAGS}
+              md4cFlags={preserveLineBreaks ? MD4C_FLAGS : WRAPPING_MD4C_FLAGS}
               linkRecognition={linkRecognition}
               enableTaskListItemToggle={false}
               enableLinkPreview={false}

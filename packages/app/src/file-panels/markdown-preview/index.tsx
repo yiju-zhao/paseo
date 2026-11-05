@@ -57,6 +57,7 @@ export function FileMarkdownPreview({
         >
           <MarkdownRenderer
             text={document.body}
+            preserveLineBreaks={false}
             filePath={filePath}
             workspaceRoot={workspaceRoot}
             client={client}
