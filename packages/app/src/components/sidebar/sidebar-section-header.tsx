@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -53,12 +53,11 @@ function CollapsibleTitle({
   testID?: string;
 }) {
   const isCompact = useIsCompactFormFactor();
-  const accessibilityState = useMemo(() => ({ expanded: !collapsed }), [collapsed]);
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={accessibilityState}
+      aria-expanded={!collapsed}
       onPress={onToggle}
       style={styles.toggle}
       testID={testID}
