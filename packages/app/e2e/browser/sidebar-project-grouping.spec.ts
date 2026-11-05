@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test as base } from "../support/fixtures";
 import { openSidebarDisplayPage } from "../support/helpers/sidebar";
+import { reloadPreservingHostRegistry } from "../support/helpers/hosts";
 import {
   beginWorkspaceFromProject,
   createWorkspaceWithoutAgent,
@@ -376,7 +377,7 @@ test.describe("Sidebar project grouping", () => {
     await expect(primaryWorkspace).toHaveCount(0);
     await expect(secondaryWorkspace).toBeVisible();
 
-    await page.reload();
+    await reloadPreservingHostRegistry(page);
     await expect(primaryHeader).toHaveAttribute("aria-expanded", "false");
     await expect(primaryWorkspace).toHaveCount(0);
     await expect(secondaryWorkspace).toBeVisible();
